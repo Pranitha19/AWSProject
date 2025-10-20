@@ -1,7 +1,7 @@
 # AWSProject
-Serverless Campus Events Registration Web Application
+# Serverless Campus Events Registration Web Application
 
-# A serverless web app that allows students and staff to:
+A serverless web app that allows students and staff to:
 
 View upcoming campus events (football games, workshops, volunteering, etc.)
 
