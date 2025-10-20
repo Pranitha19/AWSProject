@@ -1,0 +1,110 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Campus Events Serverless Backend (SAM)
+Globals:
+  Function:
+    Runtime: nodejs18.x
+    Timeout: 10
+
+Resources:
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-Events"
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  RegTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-Regs"
+      AttributeDefinitions:
+        - AttributeName: registration_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: registration_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  GetEventsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/getEvents.handler
+      CodeUri: ./
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref EventsTable
+
+  CreateEventFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/createEvent.handler
+      CodeUri: ./
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref EventsTable
+
+  RegisterEventFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/registerEvent.handler
+      CodeUri: ./
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegTable
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref EventsTable
+          REG_TABLE: !Ref RegTable
+
+  EventsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      DefinitionBody:
+        openapi: 3.0.1
+        info:
+          title: Campus Events API
+          version: '1.0'
+        paths:
+          /events:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub >
+                  arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetEventsFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+              responses: {}
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub >
+                  arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateEventFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+          /events/{eventId}/register:
+            post:
+              parameters:
+                - name: eventId
+                  in: path
+                  required: true
+              x-amazon-apigateway-integration:
+                uri: !Sub >
+                  arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RegisterEventFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+
+Outputs:
+  ApiUrl:
+    Value: !Sub "https://${EventsApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Export:
+      Name: ApiUrl
